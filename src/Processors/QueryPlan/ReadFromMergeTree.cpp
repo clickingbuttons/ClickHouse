@@ -643,7 +643,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
             parts_with_ranges,
             extension,
             read_type == ReadFromMergeTree::ReadType::InOrder ? CoordinationMode::WithOrder : CoordinationMode::ReverseOrder,
-            info.min_marks_for_concurrent_read);
+            min_marks_for_concurrent_read);
 
         pool->initialize();
     }
