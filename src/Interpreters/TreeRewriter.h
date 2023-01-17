@@ -22,7 +22,7 @@ using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 struct StorageSnapshot;
 using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
-struct TreeRewriterResult : WithContext
+struct TreeRewriterResult
 {
     ConstStoragePtr storage;
     StorageSnapshotPtr storage_snapshot;
@@ -82,7 +82,6 @@ struct TreeRewriterResult : WithContext
     Scalars local_scalars;
 
     explicit TreeRewriterResult(
-        ContextPtr context_,
         const NamesAndTypesList & source_columns_,
         ConstStoragePtr storage_ = {},
         const StorageSnapshotPtr & storage_snapshot_ = {},

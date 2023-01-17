@@ -1,3 +1,4 @@
+#include <variant>
 #include <Common/ConcurrentBoundedQueue.h>
 
 #include <QueryPipeline/ConnectionCollector.h>
@@ -259,7 +260,19 @@ void RemoteQueryExecutor::sendQuery(ClientInfo::QueryKind query_kind)
     sendExternalTables();
 }
 
-Block RemoteQueryExecutor::read()
+
+Block RemoteQueryExecutor::readBlock()
+{
+    while (true)
+    {
+        auto res = read();
+        if (std::holds_alternative<Block>(res))
+            return std::get<Block>(res);
+    }
+}
+
+
+RemoteQueryExecutor::ReadResult RemoteQueryExecutor::read()
 {
     if (!sent_query)
     {
@@ -275,16 +288,18 @@ Block RemoteQueryExecutor::read()
         if (was_cancelled)
             return Block();
 
-        Packet packet = connections->receivePacket();
+        auto packet = connections->receivePacket();
+        auto anything = processPacket(std::move(packet));
 
-        if (auto block = processPacket(std::move(packet)))
-            return *block;
+        if (std::holds_alternative<Block>(anything) || std::holds_alternative<ParallelReplicasToken>(anything))
+            return anything;
         else if (got_duplicated_part_uuids)
+            /// FIXME?
             return std::get<Block>(restartQueryWithoutDuplicatedUUIDs());
     }
 }
 
-std::variant<Block, int> RemoteQueryExecutor::read(std::unique_ptr<ReadContext> & read_context [[maybe_unused]])
+RemoteQueryExecutor::ReadResult RemoteQueryExecutor::read(std::unique_ptr<ReadContext> & read_context [[maybe_unused]])
 {
 #if defined(OS_LINUX)
     if (!sent_query)
@@ -322,9 +337,11 @@ std::variant<Block, int> RemoteQueryExecutor::read(std::unique_ptr<ReadContext> 
             if (was_cancelled)
                 return Block();
 
-            if (auto data = processPacket(std::move(read_context->packet)))
-                return std::move(*data);
-            else if (got_duplicated_part_uuids)
+            auto anything = processPacket(std::move(read_context->packet));
+
+            if (std::holds_alternative<Block>(anything) || std::holds_alternative<ParallelReplicasToken>(anything)) {
+                return anything;
+            } else if (got_duplicated_part_uuids)
                 return restartQueryWithoutDuplicatedUUIDs(&read_context);
         }
     }
@@ -335,7 +352,7 @@ std::variant<Block, int> RemoteQueryExecutor::read(std::unique_ptr<ReadContext> 
 }
 
 
-std::variant<Block, int> RemoteQueryExecutor::restartQueryWithoutDuplicatedUUIDs(std::unique_ptr<ReadContext> * read_context)
+RemoteQueryExecutor::ReadResult RemoteQueryExecutor::restartQueryWithoutDuplicatedUUIDs(std::unique_ptr<ReadContext> * read_context)
 {
     /// Cancel previous query and disconnect before retry.
     cancel(read_context);
@@ -359,16 +376,18 @@ std::variant<Block, int> RemoteQueryExecutor::restartQueryWithoutDuplicatedUUIDs
     throw Exception("Found duplicate uuids while processing query", ErrorCodes::DUPLICATED_PART_UUIDS);
 }
 
-std::optional<Block> RemoteQueryExecutor::processPacket(Packet packet)
+RemoteQueryExecutor::ReadResult RemoteQueryExecutor::processPacket(Packet packet)
 {
     switch (packet.type)
     {
         case Protocol::Server::MergeTreeReadTaskRequest:
             processMergeTreeReadTaskRequest(packet.request);
-            break;
+            return ParallelReplicasToken{};
+
         case Protocol::Server::MergeTreeAllRangesAnnounecement:
             processMergeTreeInitialReadAnnounecement(packet.announcement);
-            break;
+            return ParallelReplicasToken{};
+
         case Protocol::Server::ReadTaskRequest:
             processReadTaskRequest();
             break;
@@ -448,7 +467,7 @@ std::optional<Block> RemoteQueryExecutor::processPacket(Packet packet)
                 connections->dumpAddresses());
     }
 
-    return {};
+    return Nothing{};
 }
 
 bool RemoteQueryExecutor::setPartUUIDs(const std::vector<UUID> & uuids)
@@ -546,6 +565,11 @@ void RemoteQueryExecutor::cancel(std::unique_ptr<ReadContext> * read_context)
         return;
 
     tryCancel("Cancelling query", read_context);
+}
+
+size_t RemoteQueryExecutor::getRemoteParallelReplicasStats() const
+{
+    return parallel_reading_coordinator->getRemoteParallelReplicasStats();
 }
 
 void RemoteQueryExecutor::sendScalars()

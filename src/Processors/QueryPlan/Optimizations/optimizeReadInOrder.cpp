@@ -1158,6 +1158,16 @@ void optimizeReadInOrder(QueryPlan::Node & node, QueryPlan::Nodes & nodes)
     }
     else if (auto order_info = buildInputOrderInfo(*sorting, *node.children.front()))
     {
+        /// We have to find a step to read using parallel replicas
+        /// not to add special "dependency" processors there.
+        for (auto & other_node : nodes)
+        {
+            if (auto * parallel = typeid_cast<ReadFromParallelRemoteReplicasStep *>(other_node.step.get()))
+            {
+                parallel->enforceReadingInOrder();
+            }
+        }
+
         sorting->convertToFinishSorting(order_info->sort_description_for_merging);
     }
 }

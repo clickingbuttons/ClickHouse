@@ -182,7 +182,8 @@ void ReadFromRemote::addLazyPipe(Pipes & pipes, const ClusterProxy::SelectStream
 
         if (try_results.empty() || local_delay < max_remote_delay)
         {
-            auto plan = createLocalPlan(query, header, context, stage, shard.shard_info.shard_num, shard_count, 0, 0, /*coordinator=*/nullptr, /*scheduler*/nullptr);
+            auto plan = createLocalPlan(
+                query, header, context, stage, shard.shard_info.shard_num, shard_count, 0, 0, /*coordinator=*/nullptr);
 
             return std::move(*plan->buildQueryPipeline(
                 QueryPlanOptimizationSettings::fromContext(context),
@@ -233,7 +234,7 @@ void ReadFromRemote::addPipe(Pipes & pipes, const ClusterProxy::SelectStreamFact
     std::shared_ptr<RemoteQueryExecutor> remote_query_executor;
 
     remote_query_executor = std::make_shared<RemoteQueryExecutor>(
-            shard.shard_info.pool, query_string, shard.header, context, throttler, scalars, external_tables, stage);
+            shard.shard_info.pool, query_string, output_stream->header, context, throttler, scalars, external_tables, stage);
 
     remote_query_executor->setLogger(log);
     remote_query_executor->setPoolMode(PoolMode::GET_MANY);
@@ -313,6 +314,12 @@ void ReadFromParallelRemoteReplicasStep::enforceAggregationInOrder()
     DB::enforceAggregationInOrder(stage, *context);
 }
 
+void ReadFromParallelRemoteReplicasStep:: enforceReadingInOrder()
+{
+    std::cout << "enforceReafingInOrder()1!!" << std::endl;
+    will_read_in_order = true;
+}
+
 void ReadFromParallelRemoteReplicasStep::initializePipeline(QueryPipelineBuilder & pipeline, const BuildQueryPipelineSettings &)
 {
     Pipes pipes;
@@ -341,14 +348,15 @@ void ReadFromParallelRemoteReplicasStep::initializePipeline(QueryPipelineBuilder
         auto pool_with_failover = std::make_shared<ConnectionPoolWithFailover>(
             ConnectionPoolPtrs{pool}, current_settings.load_balancing);
 
-        addPipeForSingeReplica(pipes, std::move(pool_with_failover), replica_info);
+        auto executor = addPipeForSingeReplica(pipes, std::move(pool_with_failover), replica_info);
 
-        pipes.back().addSimpleTransform([&](const Block & header) -> ProcessorPtr
-        {
-            auto remote_dependency = std::make_shared<RemoteDependencyTransform>(header);
-            context->input_dependencies->emplace_back(remote_dependency.get());
-            return remote_dependency;
-        });
+        // if (!will_read_in_order)
+        // {
+        //     pipes.back().addSimpleTransform([&](const Block & header) -> ProcessorPtr
+        //     {
+        //         return std::make_shared<RemoteDependencyTransform>(executor, header);
+        //     });
+        // }
 
         ++replica_num;
     }
@@ -363,7 +371,7 @@ void ReadFromParallelRemoteReplicasStep::initializePipeline(QueryPipelineBuilder
 }
 
 
-void ReadFromParallelRemoteReplicasStep::addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info)
+RemoteQueryExecutorPtr ReadFromParallelRemoteReplicasStep::addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info)
 {
     bool add_agg_info = stage == QueryProcessingStage::WithMergeableState;
     bool add_totals = false;
@@ -388,9 +396,11 @@ void ReadFromParallelRemoteReplicasStep::addPipeForSingeReplica(Pipes & pipes, s
 
     remote_query_executor->setLogger(log);
 
-    pipes.emplace_back(createRemoteSourcePipe(std::move(remote_query_executor), add_agg_info, add_totals, add_extremes, async_read));
+    pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read));
 
     addConvertingActions(pipes.back(), output_stream->header);
+
+    return remote_query_executor;
 }
 
 }

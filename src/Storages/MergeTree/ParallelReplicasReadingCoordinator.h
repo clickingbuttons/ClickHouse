@@ -20,6 +20,8 @@ public:
     void handleInitialAllRangesAnnouncement(InitialAllRangesAnnouncement);
     ParallelReadResponse handleRequest(ParallelReadRequest request);
 
+    size_t getRemoteParallelReplicasStats();
+
 private:
     CoordinationMode mode{CoordinationMode::Default};
     size_t replicas_count{0};

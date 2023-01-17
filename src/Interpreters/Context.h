@@ -408,26 +408,6 @@ public:
     KitchenSink kitchen_sink;
 
     ParallelReplicasReadingCoordinatorPtr parallel_reading_coordinator;
-    mutable bool scheduler_tag{false};
-    mutable std::shared_ptr<ResizeProcessor> scheduler{nullptr};
-    mutable std::shared_ptr<std::vector<DependentProcessor *>>  input_dependencies;
-    mutable std::shared_ptr<std::vector<DependentProcessor *>> output_dependencies;
-
-    bool connectDependenciesIfNeeded() const
-    {
-        if (!input_dependencies || !output_dependencies || !scheduler_tag)
-            return false;
-        assert(input_dependencies);
-        assert(output_dependencies);
-        assert(scheduler_tag);
-
-        scheduler = std::make_shared<ResizeProcessor>(Block{}, input_dependencies->size(), output_dependencies->size());
-        for (auto * dependency : *input_dependencies)
-            dependency->connectToScheduler(*scheduler);
-        for (auto * dependency : *output_dependencies)
-            dependency->connectToScheduler(*scheduler);
-        return true;
-    }
 
 private:
     using SampleBlockCache = std::unordered_map<std::string, Block>;
@@ -1095,6 +1075,9 @@ public:
 
     /** Get settings for writing to filesystem. */
     WriteSettings getWriteSettings() const;
+
+    /** There are multiple conditions that have to be met to be able to use parallel replicas */
+    bool useParallelReplicas() const;
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

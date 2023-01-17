@@ -2049,7 +2049,7 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
             String parts_to_remove_str;
             for (const auto & part : parts_to_remove)
             {
-                parts_to_remove_str += part.getPartName();
+                parts_to_remove_str += part.getPartNameV1();
                 parts_to_remove_str += " ";
             }
             LOG_TRACE(log, "Replacing {} parts {}with empty set", parts_to_remove.size(), parts_to_remove_str);
@@ -2325,7 +2325,7 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
                 String parts_to_remove_str;
                 for (const auto & part : parts_to_remove)
                 {
-                    parts_to_remove_str += part.getPartName();
+                    parts_to_remove_str += part.getPartNameV1();
                     parts_to_remove_str += " ";
                 }
                 LOG_TRACE(log, "Replacing {} parts {}with {} parts {}", parts_to_remove.size(), parts_to_remove_str,
@@ -6594,7 +6594,7 @@ void StorageReplicatedMergeTree::removePartsFromZooKeeperWithRetries(PartsToRemo
 {
     Strings part_names_to_remove;
     for (const auto & part : parts)
-        part_names_to_remove.emplace_back(part.getPartName());
+        part_names_to_remove.emplace_back(part.getPartNameV1());
 
     return removePartsFromZooKeeperWithRetries(part_names_to_remove, max_retries);
 }

@@ -261,11 +261,6 @@ void executeQueryWithParallelReplicas(
     auto remote_plan = std::make_unique<QueryPlan>();
     auto plans = std::vector<QueryPlanPtr>();
 
-    context->scheduler_tag = true;
-    /// We won't initialize scheduler here
-    context->input_dependencies = std::make_shared<std::vector<DependentProcessor *>>();
-    context->output_dependencies = std::make_shared<std::vector<DependentProcessor *>>();
-
     /// This is a little bit weird, but we construct an "empty" coordinator without
     /// any specified reading/coordination method (like Default, InOrder, InReverseOrder)
     /// Because we will understand it later during QueryPlan optimization
@@ -282,8 +277,7 @@ void executeQueryWithParallelReplicas(
         /*shard_count*/1,
         0,
         all_replicas_count,
-        coordinator,
-        context->scheduler));
+        coordinator));
 
     if (!shard_info.hasRemoteConnections())
     {

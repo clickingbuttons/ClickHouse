@@ -6,9 +6,13 @@
 #include <Interpreters/StorageID.h>
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
+#include "QueryPipeline/RemoteQueryExecutor.h"
 
 namespace DB
 {
+
+class RemoteQueryExecutor;
+using RemoteQueryExecutorPtr = std::shared_ptr<RemoteQueryExecutor>;
 
 class ConnectionPoolWithFailover;
 using ConnectionPoolWithFailoverPtr = std::shared_ptr<ConnectionPoolWithFailover>;
@@ -89,10 +93,11 @@ public:
 
     void enforceSorting(SortDescription output_sort_description);
     void enforceAggregationInOrder();
+    void enforceReadingInOrder();
 
 private:
 
-    void addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info);
+    RemoteQueryExecutorPtr addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info);
 
     Cluster::ShardInfo shard_info;
     ASTPtr query_ast;
@@ -106,6 +111,8 @@ private:
     ThrottlerPtr throttler;
     Scalars scalars;
     Tables external_tables;
+
+    bool will_read_in_order{false};
 
     std::shared_ptr<const StorageLimitsList> storage_limits;
     Poco::Logger * log;

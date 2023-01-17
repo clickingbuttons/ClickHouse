@@ -708,7 +708,7 @@ ASTPtr StorageWindowView::getSourceTableSelectQuery()
 
     if (hasJoin(modified_select))
     {
-        auto analyzer_res = TreeRewriterResult(getContext(), {});
+        auto analyzer_res = TreeRewriterResult({});
         removeJoin(modified_select, analyzer_res, getContext());
     }
     else

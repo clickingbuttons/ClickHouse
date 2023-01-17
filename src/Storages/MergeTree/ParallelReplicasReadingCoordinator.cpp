@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <mutex>
+#include <numeric>
 #include <vector>
 #include <map>
 #include <set>
@@ -45,9 +46,29 @@ public:
         return result;
     }
 
+    Stats stats;
+    std::mutex mutex;
+    size_t replicas_count;
+
+    explicit ImplInterface(size_t replicas_count_)
+        : stats{replicas_count_}
+        , replicas_count(replicas_count_)
+    {}
+
     virtual ~ImplInterface() = default;
     virtual ParallelReadResponse handleRequest(ParallelReadRequest request) = 0;
     virtual void handleInitialAllRangesAnnouncement(InitialAllRangesAnnouncement announcement) = 0;
+    size_t getRemoteParallelReplicasStats()
+    {
+        std::lock_guard lock(mutex);
+
+        size_t result = 0;
+        /// Not to include local replica
+        for (size_t i = 1; i < stats.size(); ++i)
+            result += stats[i].number_of_requests;
+
+        return result;
+    }
 };
 
 
@@ -72,10 +93,9 @@ public:
     using PartToMarkRanges = std::map<PartToRead::PartAndProjectionNames, HalfIntervals>;
 
     explicit DefaultCoordinator(size_t replicas_count_)
-        : replicas_count(replicas_count_)
+        : ParallelReplicasReadingCoordinator::ImplInterface(replicas_count_)
         , announcements(replicas_count_)
         , reading_state(replicas_count_)
-        , stats(replicas_count_)
     {
     }
 
@@ -90,8 +110,6 @@ public:
     using PartitionToBlockRanges = std::map<String, PartitionReading>;
     PartitionToBlockRanges partitions;
 
-    std::mutex mutex;
-    size_t replicas_count{0};
     size_t sent_initial_requests{0};
     std::vector<InitialAllRangesAnnouncement> announcements;
 
@@ -103,7 +121,6 @@ public:
     std::vector<PartRefs> reading_state;
 
     Poco::Logger * log = &Poco::Logger::get("DefaultCoordinator");
-    Stats stats;
 
     std::atomic<bool> state_initialized{false};
 
@@ -116,7 +133,7 @@ public:
     size_t computeConsistentHash(const MergeTreePartInfo & info) const
     {
         auto hash = SipHash();
-        hash.update(info.getPartName());
+        hash.update(info.getPartNameV1());
         return ConsistentHashing(hash.get64(), replicas_count);
     }
 
@@ -139,7 +156,7 @@ void DefaultCoordinator::updateReadingState(const InitialAllRangesAnnouncement &
             [&part] (const Part & other) { return !other.description.info.isDisjoint(part.info); });
 
         auto the_same_it = std::find_if(all_parts_to_read.begin(), all_parts_to_read.end(),
-            [&part] (const Part & other) { return other.description.info.getPartName() == part.info.getPartName(); });
+            [&part] (const Part & other) { return other.description.info.getPartNameV1() == part.info.getPartNameV1(); });
 
         /// We have the same part - add the info about presence on current replica to it
         if (the_same_it != all_parts_to_read.end())
@@ -231,7 +248,7 @@ void DefaultCoordinator::selectPartsAndRanges(const PartRefs & container, size_t
     {
         if (std::find(part->replicas.begin(), part->replicas.end(), replica_num) == part->replicas.end())
         {
-            LOG_TEST(log, "Not found part {} on replica {}", part->description.info.getPartName(), replica_num);
+            LOG_TEST(log, "Not found part {} on replica {}", part->description.info.getPartNameV1(), replica_num);
             continue;
         }
 
@@ -243,7 +260,7 @@ void DefaultCoordinator::selectPartsAndRanges(const PartRefs & container, size_t
 
         if (part->description.ranges.empty())
         {
-            LOG_TEST(log, "Part {} is already empty in reading state", part->description.info.getPartName());
+            LOG_TEST(log, "Part {} is already empty in reading state", part->description.info.getPartNameV1());
             continue;
         }
 
@@ -330,7 +347,7 @@ class InOrderCoordinator : public ParallelReplicasReadingCoordinator::ImplInterf
 {
 public:
     explicit InOrderCoordinator([[ maybe_unused ]] size_t replicas_count_)
-        : stats(replicas_count_)
+        : ParallelReplicasReadingCoordinator::ImplInterface(replicas_count_)
     {}
     ~InOrderCoordinator() override
     {
@@ -340,12 +357,9 @@ public:
     ParallelReadResponse handleRequest([[ maybe_unused ]]  ParallelReadRequest request) override;
     void handleInitialAllRangesAnnouncement([[ maybe_unused ]]  InitialAllRangesAnnouncement announcement) override;
 
-    Stats stats;
     Parts all_parts_to_read;
 
     Poco::Logger * log = &Poco::Logger::get(fmt::format("{}{}", magic_enum::enum_name(mode), "Coordinator"));
-
-    std::mutex mutex;
 };
 
 
@@ -419,7 +433,7 @@ ParallelReadResponse InOrderCoordinator<mode>::handleRequest(ParallelReadRequest
             continue;
 
         if (!global_part_it->replicas.contains(request.replica_num))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Part {} doesn't exist on replica {} according to the global state", part.info.getPartName(), request.replica_num);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Part {} doesn't exist on replica {} according to the global state", part.info.getPartNameV1(), request.replica_num);
 
         size_t current_mark_size = 0;
 
@@ -525,6 +539,11 @@ void ParallelReplicasReadingCoordinator::initialize()
             pimpl = std::make_unique<InOrderCoordinator<CoordinationMode::ReverseOrder>>(replicas_count);
             return;
     }
+}
+
+size_t ParallelReplicasReadingCoordinator::getRemoteParallelReplicasStats()
+{
+    return pimpl->getRemoteParallelReplicasStats();
 }
 
 ParallelReplicasReadingCoordinator::ParallelReplicasReadingCoordinator(size_t replicas_count_) : replicas_count(replicas_count_) {}

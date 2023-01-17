@@ -161,7 +161,7 @@ FilterDAGInfoPtr generateFilterActions(
     table_expr->children.push_back(table_expr->database_and_table_name);
 
     /// Using separate expression analyzer to prevent any possible alias injection
-    auto syntax_result = TreeRewriter(context).analyzeSelect(query_ast, TreeRewriterResult(context, {}, storage, storage_snapshot));
+    auto syntax_result = TreeRewriter(context).analyzeSelect(query_ast, TreeRewriterResult({}, storage, storage_snapshot));
     SelectQueryExpressionAnalyzer analyzer(query_ast, syntax_result, context, metadata_snapshot, {}, false, {}, prepared_sets);
     filter_info->actions = analyzer.simpleSelectActions();
 
@@ -536,7 +536,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         syntax_analyzer_result = TreeRewriter(context).analyzeSelect(
             query_ptr,
-            TreeRewriterResult(context, source_header.getNamesAndTypesList(), storage, storage_snapshot),
+            TreeRewriterResult(source_header.getNamesAndTypesList(), storage, storage_snapshot),
             options,
             joined_tables.tablesWithColumns(),
             required_result_column_names,
@@ -2200,7 +2200,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
      *  instead of max_threads, max_distributed_connections is used.
      */
     bool is_remote = false;
-    if (storage && storage->isRemote(context))
+    const bool parallel_replicas_from_merge_tree = storage && storage->isMergeTree() && context->useParallelReplicas();
+    if (storage && (storage->isRemote() || parallel_replicas_from_merge_tree))
     {
         is_remote = true;
         max_threads_execute_query = max_streams = settings.max_distributed_connections;
@@ -2570,12 +2571,13 @@ void InterpreterSelectQuery::executeMergeAggregated(QueryPlan & query_plan, bool
 
     const bool should_produce_results_in_order_of_bucket_number = options.to_stage == QueryProcessingStage::WithMergeableState
         && (settings.distributed_aggregation_memory_efficient || settings.enable_memory_bound_merging_of_aggregation_results);
+    const bool parallel_replicas_from_merge_tree = storage->isMergeTree() && context->useParallelReplicas();
 
     executeMergeAggregatedImpl(
         query_plan,
         overflow_row,
         final,
-        storage && storage->isRemote(context),
+        storage && (storage->isRemote() || parallel_replicas_from_merge_tree),
         has_grouping_sets,
         context->getSettingsRef(),
         query_analyzer->aggregationKeys(),

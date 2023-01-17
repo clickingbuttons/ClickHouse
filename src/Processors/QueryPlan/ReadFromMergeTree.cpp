@@ -250,9 +250,7 @@ Pipe ReadFromMergeTree::readFromPoolParallelReplicas(
         {
             pipes.back().addSimpleTransform([&](const Block & header) -> ProcessorPtr
             {
-                auto read_dependency = std::make_shared<ReadFromMergeTreeDependencyTransform>(header);
-                context->output_dependencies->emplace_back(read_dependency.get());
-                return read_dependency;
+                return std::make_shared<ReadFromMergeTreeDependencyTransform>(header);
             });
         }
     }
@@ -724,16 +722,6 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsWithOrder(
     {
         pipes.emplace_back(readInOrder(std::move(item), column_names, read_type,
                                         info.use_uncompressed_cache, input_order_info->limit, pool));
-
-        if (is_parallel_reading_from_replicas && context->getClientInfo().interface == ClientInfo::Interface::LOCAL)
-        {
-            pipes.back().addSimpleTransform([&](const Block & header) -> ProcessorPtr
-            {
-                auto read_dependency = std::make_shared<ReadFromMergeTreeDependencyTransform>(header);
-                context->output_dependencies->emplace_back(read_dependency.get());
-                return read_dependency;
-            });
-        }
     }
 
     Block pipe_header;
