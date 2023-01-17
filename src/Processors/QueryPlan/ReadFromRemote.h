@@ -6,13 +6,9 @@
 #include <Interpreters/StorageID.h>
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Storages/MergeTree/ParallelReplicasReadingCoordinator.h>
-#include "QueryPipeline/RemoteQueryExecutor.h"
 
 namespace DB
 {
-
-class RemoteQueryExecutor;
-using RemoteQueryExecutorPtr = std::shared_ptr<RemoteQueryExecutor>;
 
 class ConnectionPoolWithFailover;
 using ConnectionPoolWithFailoverPtr = std::shared_ptr<ConnectionPoolWithFailover>;
@@ -97,7 +93,7 @@ public:
 
 private:
 
-    RemoteQueryExecutorPtr addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info);
+    void addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info);
 
     Cluster::ShardInfo shard_info;
     ASTPtr query_ast;

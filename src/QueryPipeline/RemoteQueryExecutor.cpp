@@ -339,9 +339,9 @@ RemoteQueryExecutor::ReadResult RemoteQueryExecutor::read(std::unique_ptr<ReadCo
 
             auto anything = processPacket(std::move(read_context->packet));
 
-            if (std::holds_alternative<Block>(anything) || std::holds_alternative<ParallelReplicasToken>(anything)) {
+            if (std::holds_alternative<Block>(anything) || std::holds_alternative<ParallelReplicasToken>(anything))
                 return anything;
-            } else if (got_duplicated_part_uuids)
+            else if (got_duplicated_part_uuids)
                 return restartQueryWithoutDuplicatedUUIDs(&read_context);
         }
     }

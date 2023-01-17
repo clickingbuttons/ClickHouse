@@ -9,6 +9,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR:
+}
+
 RemoteSource::RemoteSource(RemoteQueryExecutorPtr executor, bool add_aggregation_info_, bool async_read_)
     : ISource(executor->getHeader(), false)
     , add_aggregation_info(add_aggregation_info_), query_executor(std::move(executor))

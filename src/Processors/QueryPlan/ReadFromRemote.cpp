@@ -316,7 +316,6 @@ void ReadFromParallelRemoteReplicasStep::enforceAggregationInOrder()
 
 void ReadFromParallelRemoteReplicasStep:: enforceReadingInOrder()
 {
-    std::cout << "enforceReafingInOrder()1!!" << std::endl;
     will_read_in_order = true;
 }
 
@@ -348,16 +347,7 @@ void ReadFromParallelRemoteReplicasStep::initializePipeline(QueryPipelineBuilder
         auto pool_with_failover = std::make_shared<ConnectionPoolWithFailover>(
             ConnectionPoolPtrs{pool}, current_settings.load_balancing);
 
-        auto executor = addPipeForSingeReplica(pipes, std::move(pool_with_failover), replica_info);
-
-        // if (!will_read_in_order)
-        // {
-        //     pipes.back().addSimpleTransform([&](const Block & header) -> ProcessorPtr
-        //     {
-        //         return std::make_shared<RemoteDependencyTransform>(executor, header);
-        //     });
-        // }
-
+        addPipeForSingeReplica(pipes, std::move(pool_with_failover), replica_info);
         ++replica_num;
     }
 
@@ -371,7 +361,7 @@ void ReadFromParallelRemoteReplicasStep::initializePipeline(QueryPipelineBuilder
 }
 
 
-RemoteQueryExecutorPtr ReadFromParallelRemoteReplicasStep::addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info)
+void ReadFromParallelRemoteReplicasStep::addPipeForSingeReplica(Pipes & pipes, std::shared_ptr<ConnectionPoolWithFailover> pool, IConnections::ReplicaInfo replica_info)
 {
     bool add_agg_info = stage == QueryProcessingStage::WithMergeableState;
     bool add_totals = false;
@@ -396,11 +386,8 @@ RemoteQueryExecutorPtr ReadFromParallelRemoteReplicasStep::addPipeForSingeReplic
 
     remote_query_executor->setLogger(log);
 
-    pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, add_agg_info, add_totals, add_extremes, async_read));
-
+    pipes.emplace_back(createRemoteSourcePipe(std::move(remote_query_executor), add_agg_info, add_totals, add_extremes, async_read));
     addConvertingActions(pipes.back(), output_stream->header);
-
-    return remote_query_executor;
 }
 
 }

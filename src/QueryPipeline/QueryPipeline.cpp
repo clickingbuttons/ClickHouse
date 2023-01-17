@@ -112,8 +112,6 @@ static void checkPulling(
         WriteBufferFromOwnString ss;
         printPipeline(processors, ss);
         LOG_FATAL(&Poco::Logger::get("checkPulling"), "Checking pipeline: {}", ss.str());
-
-        std::cout << ss.str() << std::endl;
     }
 
 
