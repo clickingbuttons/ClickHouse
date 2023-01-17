@@ -112,7 +112,6 @@ namespace ErrorCodes
     extern const int INVALID_WITH_FILL_EXPRESSION;
     extern const int ACCESS_DENIED;
     extern const int UNKNOWN_IDENTIFIER;
-    extern const int SUPPORT_IS_DISABLED;
 }
 
 /// Assumes `storage` is set and the table filter (row-level security) is not empty.
