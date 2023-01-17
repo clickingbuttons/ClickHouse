@@ -448,7 +448,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     if (joined_tables.tablesCount() > 1 && settings.allow_experimental_parallel_reading_from_replicas)
-        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Joins are not support with parallel replicas");
+    {
+        LOG_WARNING(log, "Joins are not support with parallel replicas. Query will be executed without using them.");
+        context->setSetting("allow_experimental_parallel_reading_from_replicas", false);
+    }
 
     /// Rewrite JOINs
     if (!has_input && joined_tables.tablesCount() > 1)
@@ -1899,21 +1902,6 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
     }
 }
 
-void InterpreterSelectQuery::setMergeTreeReadTaskCallbackAndClientInfo(MergeTreeAllRangesCallback && all_callback, MergeTreeReadTaskCallback && callback)
-{
-    context->getClientInfo().collaborate_with_initiator = true;
-    context->setMergeTreeAllRangesCallback(std::move(all_callback));
-    context->setMergeTreeReadTaskCallback(std::move(callback));
-}
-
-void InterpreterSelectQuery::setProperClientInfo(size_t replica_num, size_t replica_count)
-{
-    context->getClientInfo().collaborate_with_initiator = true;
-    context->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-    context->getClientInfo().count_participating_replicas = replica_count;
-    context->getClientInfo().number_of_current_replica = replica_num;
-}
-
 RowPolicyFilterPtr InterpreterSelectQuery::getRowPolicyFilter() const
 {
     return row_policy_filter;
@@ -2200,8 +2188,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
      *  instead of max_threads, max_distributed_connections is used.
      */
     bool is_remote = false;
-    const bool parallel_replicas_from_merge_tree = storage && storage->isMergeTree() && context->useParallelReplicas();
-    if (storage && (storage->isRemote() || parallel_replicas_from_merge_tree))
+    // const bool parallel_replicas_from_merge_tree = storage && storage->isMergeTree() && context->useParallelReplicas();
+    if (storage && storage->isRemote())
     {
         is_remote = true;
         max_threads_execute_query = max_streams = settings.max_distributed_connections;

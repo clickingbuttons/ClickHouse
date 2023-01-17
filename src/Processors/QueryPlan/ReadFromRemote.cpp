@@ -106,7 +106,7 @@ ReadFromRemote::ReadFromRemote(
     Poco::Logger * log_,
     UInt32 shard_count_,
     std::shared_ptr<const StorageLimitsList> storage_limits_)
-    : ISourceStep(DataStream{.header = header_})
+    : ISourceStep(DataStream{.header = std::move(header_)})
     , shards(std::move(shards_))
     , stage(stage_)
     , main_table(std::move(main_table_))

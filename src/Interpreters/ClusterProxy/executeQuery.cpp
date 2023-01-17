@@ -27,6 +27,7 @@ namespace ErrorCodes
 {
     extern const int TOO_LARGE_DISTRIBUTED_DEPTH;
     extern const int LOGICAL_ERROR;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 namespace ClusterProxy
@@ -251,7 +252,7 @@ void executeQueryWithParallelReplicas(
     const ClusterPtr & not_optimized_cluster)
 {
     if (not_optimized_cluster->getShardsInfo().size() != 1)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cluster for parallel replicas should consist only from one shard");
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cluster for parallel replicas should consist only from one shard");
 
     auto shard_info = not_optimized_cluster->getShardsInfo().front();
 

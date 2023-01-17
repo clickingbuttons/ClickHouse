@@ -82,13 +82,11 @@ std::unique_ptr<QueryPlan> createLocalPlan(
     if (context->getSettingsRef().allow_experimental_analyzer)
     {
         auto interpreter = InterpreterSelectQueryAnalyzer(query_ast, new_context, select_query_options);
-        interpreter.setProperClientInfo(replica_num, replica_count);
         query_plan = std::make_unique<QueryPlan>(std::move(interpreter).extractQueryPlan());
     }
     else
     {
         auto interpreter = InterpreterSelectQuery(query_ast, new_context, select_query_options);
-        interpreter.setProperClientInfo(replica_num, replica_count);
         interpreter.buildQueryPlan(*query_plan);
     }
 

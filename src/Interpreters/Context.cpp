@@ -3592,7 +3592,7 @@ void Context::setMergeTreeReadTaskCallback(MergeTreeReadTaskCallback && callback
 MergeTreeAllRangesCallback Context::getMergeTreeAllRangesCallback() const
 {
     if (!merge_tree_all_ranges_callback.has_value())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Next task callback for is not set for query {}", getInitialQueryId());
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Next task callback is not set for query with id: {}", getInitialQueryId());
 
     return merge_tree_all_ranges_callback.value();
 }
